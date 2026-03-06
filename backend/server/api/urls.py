@@ -5,9 +5,8 @@ from .views import (
     update_appointment_status,
     upload_mom_pdf,
     get_client_by_phone,
-    search_clients,
-    admin_login,
     dashboard_stats,
+    admin_login,   # ✅ ADD THIS
 )
 
 urlpatterns = [
@@ -17,13 +16,10 @@ urlpatterns = [
     # ✅ Client auto-fill by phone
     path("client-by-phone/", get_client_by_phone, name="client-by-phone"),
 
-    # ✅ Client name search for autocomplete
-    path("clients/", search_clients, name="client-search"),
-
     # ✅ Admin Login API
-    path("admin-login/", admin_login, name="admin-login"),
+    path("admin-login/", admin_login, name="admin-login"),   # ✅ ADD THIS
 
-    # ✅ Dashboard Stats API
+    # ✅ Admin Dashboard statistics
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
 
     # ✅ Admin Dashboard list

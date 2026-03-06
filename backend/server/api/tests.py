@@ -1,42 +1,79 @@
 from django.test import TestCase
+from django.utils import timezone
+from datetime import timedelta
 
-from .models import Client
+from .models import Client, Appointment
 
 
-class ClientSearchTests(TestCase):
+class DashboardStatsTests(TestCase):
     def setUp(self):
-        # create a few clients with different names and phones
-        Client.objects.create(
-            name="Arun Kumar",
+        # create a single client and a few appointments with different statuses/dates
+        self.client_obj = Client.objects.create(
+            name="Alice",
             phone="1234567890",
-            email="arun@example.com",
+            email="alice@example.com"
         )
-        Client.objects.create(
-            name="Arun Prasad",
-            phone="2345678901",
-            email="arunp@example.com",
+        today = timezone.localdate()
+        Appointment.objects.create(
+            client=self.client_obj,
+            service="IT Software",
+            date=today,
+            time="10:00",
+            status="Pending",
         )
-        Client.objects.create(
-            name="Ravi Sharma",
-            phone="3456789012",
-            email="ravi@example.com",
+        Appointment.objects.create(
+            client=self.client_obj,
+            service="IT Hardware",
+            date=today + timedelta(days=1),
+            time="11:00",
+            status="Confirmed",
+        )
+        Appointment.objects.create(
+            client=self.client_obj,
+            service="Academy",
+            date=today - timedelta(days=1),
+            time="12:00",
+            status="Completed",
         )
 
-    def test_search_partial_name(self):
-        response = self.client.get("/api/clients/?name=arun")
+    def test_dashboard_stats_response(self):
+        response = self.client.get("/api/dashboard-stats/")
         self.assertEqual(response.status_code, 200)
         data = response.json()
-        self.assertEqual(len(data), 2)
-        self.assertTrue(any(c["name"] == "Arun Kumar" for c in data))
-        self.assertTrue(any(c["name"] == "Arun Prasad" for c in data))
 
-    def test_search_case_insensitive(self):
-        response = self.client.get("/api/clients/?name=ARUN")
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(len(data), 2)
+        # basic structure
+        expected_keys = [
+            "total_clients",
+            "total_appointments",
+            "pending_count",
+            "confirmed_count",
+            "completed_count",
+            "cancelled_count",
+            "today_count",
+            "upcoming_count",
+            "todays_appointments",
+            "upcoming_appointments",
+            "recent_clients",
+            "status_distribution",
+        ]
+        for key in expected_keys:
+            self.assertIn(key, data)
 
-    def test_empty_query_returns_empty_list(self):
-        response = self.client.get("/api/clients/?name=")
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), [])
+        # counts should match setUp
+        self.assertEqual(data["total_clients"], 1)
+        self.assertEqual(data["total_appointments"], 3)
+        self.assertEqual(data["pending_count"], 1)
+        self.assertEqual(data["confirmed_count"], 1)
+        self.assertEqual(data["completed_count"], 1)
+        self.assertEqual(data["cancelled_count"], 0)
+        self.assertEqual(data["today_count"], 1)
+        self.assertEqual(len(data["todays_appointments"]), 1)
+        self.assertEqual(len(data["upcoming_appointments"]), 1)
+        self.assertEqual(len(data["recent_clients"]), 1)
+
+        # status_distribution values should correspond
+        dist = {item["name"]: item["value"] for item in data["status_distribution"]}
+        self.assertEqual(dist.get("Pending"), 1)
+        self.assertEqual(dist.get("Confirmed"), 1)
+        self.assertEqual(dist.get("Completed"), 1)
+        self.assertEqual(dist.get("Cancelled"), 0)

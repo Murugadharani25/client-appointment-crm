@@ -8,11 +8,11 @@ from django.contrib.auth.models import User
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 from django.conf import settings
-from django.utils import timezone
-from datetime import timedelta
 
 from .models import Client, Appointment
 from .serializers import AppointmentSerializer
+from django.utils import timezone
+from datetime import timedelta
 
 
 # ============================================================
@@ -301,42 +301,90 @@ def get_client_by_phone(request):
 
 
 # ============================================================
-# ✅ NEW: SEARCH CLIENTS BY NAME (Autocomplete)
-# GET /api/clients/?name=<partial name>
+# ✅ 6) DASHBOARD STATISTICS (Admin Dashboard Enhancements)
+# GET /api/dashboard-stats/
 # ============================================================
 @api_view(["GET"])
-def search_clients(request):
-    """
-    Returns a list of clients whose names contain the provided query
-    string (case‑insensitive).  The frontend uses this for typeahead
-    suggestions.  Only a handful of fields are returned so that the
-    client object can be stored locally and used to populate all fields
-    when the user picks one of the suggestions.
-    """
-    query = request.GET.get("name", "").strip()
+def dashboard_stats(request):
+    """Returns counts and summaries used by the admin dashboard."""
+    today = timezone.localdate()
 
-    if not query:
-        # nothing to search for -> return empty array (status 200)
-        return Response([], status=status.HTTP_200_OK)
+    # summary counts
+    total_clients = Client.objects.count()
+    total_appointments = Appointment.objects.count()
+    pending_count = Appointment.objects.filter(status="Pending").count()
+    confirmed_count = Appointment.objects.filter(status="Confirmed").count()
+    completed_count = Appointment.objects.filter(status="Completed").count()
+    cancelled_count = Appointment.objects.filter(status="Cancelled").count()
 
-    matches = (
-        Client.objects
-        .filter(name__icontains=query)
-        .order_by("name")
-        [:10]  # cap the results to prevent huge payloads
+    # today's appointments
+    todays_qs = (
+        Appointment.objects.select_related("client")
+        .filter(date=today)
+        .order_by("time")
     )
+    todays_appointments = []
+    for appt in todays_qs:
+        todays_appointments.append({
+            "id": appt.id,
+            "time": str(appt.time),
+            "client_name": appt.client.name if appt.client else "",
+            "service": appt.service,
+            "status": appt.status,
+        })
 
-    payload = []
-    for c in matches:
-        payload.append({
+    # upcoming appointments (next 10)
+    upcoming_qs = (
+        Appointment.objects.select_related("client")
+        .filter(date__gt=today)
+        .order_by("date", "time")[:10]
+    )
+    upcoming_appointments = []
+    for appt in upcoming_qs:
+        upcoming_appointments.append({
+            "id": appt.id,
+            "date": str(appt.date),
+            "time": str(appt.time),
+            "client_name": appt.client.name if appt.client else "",
+            "service": appt.service,
+            "status": appt.status,
+        })
+
+    # recent clients (last 5 created)
+    recent_clients_qs = Client.objects.order_by("-id")[:5]
+    recent_clients = []
+    for c in recent_clients_qs:
+        recent_clients.append({
+            "id": c.id,
             "name": c.name,
             "phone": c.phone,
-            "email": c.email,
-            "address": c.address or "",
             "association": c.association,
         })
 
-    return Response(payload, status=status.HTTP_200_OK)
+    status_distribution = [
+        {"name": "Pending", "value": pending_count, "color": "#f59e0b"},
+        {"name": "Confirmed", "value": confirmed_count, "color": "#3b82f6"},
+        {"name": "Completed", "value": completed_count, "color": "#10b981"},
+        {"name": "Cancelled", "value": cancelled_count, "color": "#ef4444"},
+    ]
+
+    return Response(
+        {
+            "total_clients": total_clients,
+            "total_appointments": total_appointments,
+            "pending_count": pending_count,
+            "confirmed_count": confirmed_count,
+            "completed_count": completed_count,
+            "cancelled_count": cancelled_count,
+            "today_count": todays_qs.count(),
+            "upcoming_count": upcoming_qs.count(),
+            "todays_appointments": todays_appointments,
+            "upcoming_appointments": upcoming_appointments,
+            "recent_clients": recent_clients,
+            "status_distribution": status_distribution,
+        },
+        status=status.HTTP_200_OK,
+    )
 
 
 # ============================================================
@@ -371,125 +419,3 @@ def admin_login(request):
         {"message": "Admin login successful", "isAdmin": True},
         status=200,
     )
-
-
-# ============================================================
-# ✅ DASHBOARD ANALYTICS ENDPOINT
-# GET /api/dashboard-stats/
-# ============================================================
-@api_view(["GET"])
-def dashboard_stats(request):
-    """
-    Returns comprehensive dashboard statistics:
-    - Total counts (clients, appointments)
-    - Appointment status breakdown
-    - Today's appointments
-    - Upcoming appointments (next 10)
-    - Recent clients (last 5)
-    """
-    try:
-        # ✅ BASIC COUNTS (optimized with count())
-        total_clients = Client.objects.count()
-        total_appointments = Appointment.objects.count()
-
-        # ✅ APPOINTMENTS BY STATUS
-        pending_count = Appointment.objects.filter(status="Pending").count()
-        confirmed_count = Appointment.objects.filter(status="Confirmed").count()
-        completed_count = Appointment.objects.filter(status="Completed").count()
-        cancelled_count = Appointment.objects.filter(status="Cancelled").count()
-
-        # ✅ TODAY'S APPOINTMENTS (optimized)
-        today = timezone.now().date()
-        todays_appointments = (
-            Appointment.objects
-            .filter(date=today)
-            .select_related("client")
-            .order_by("time")
-            .values('id', 'time', 'client__name', 'service', 'status')
-        )
-
-        todays_list = [
-            {
-                "id": apt["id"],
-                "time": str(apt["time"]),
-                "client_name": apt["client__name"],
-                "service": apt["service"],
-                "status": apt["status"],
-            }
-            for apt in todays_appointments
-        ]
-
-        # ✅ UPCOMING APPOINTMENTS (next 10, excluding today)
-        tomorrow = today + timedelta(days=1)
-        upcoming_appointments = (
-            Appointment.objects
-            .filter(date__gte=tomorrow)
-            .select_related("client")
-            .order_by("date", "time")[:10]
-            .values('id', 'date', 'time', 'client__name', 'service', 'status')
-        )
-
-        upcoming_list = [
-            {
-                "id": apt["id"],
-                "date": str(apt["date"]),
-                "time": str(apt["time"]),
-                "client_name": apt["client__name"],
-                "service": apt["service"],
-                "status": apt["status"],
-            }
-            for apt in upcoming_appointments
-        ]
-
-        # ✅ RECENT CLIENTS (last 5 added)
-        recent_clients = (
-            Client.objects
-            .all()
-            .order_by("-id")[:5]
-            .values('id', 'name', 'phone', 'association')
-        )
-
-        recent_list = [
-            {
-                "id": c["id"],
-                "name": c["name"],
-                "phone": c["phone"],
-                "association": c["association"],
-            }
-            for c in recent_clients
-        ]
-
-        # ✅ STATUS DISTRIBUTION FOR CHART
-        status_data = [
-            {"name": "Pending", "value": pending_count, "color": "#f59e0b"},
-            {"name": "Confirmed", "value": confirmed_count, "color": "#3b82f6"},
-            {"name": "Completed", "value": completed_count, "color": "#10b981"},
-            {"name": "Cancelled", "value": cancelled_count, "color": "#ef4444"},
-        ]
-
-        return Response(
-            {
-                "total_clients": total_clients,
-                "total_appointments": total_appointments,
-                "pending_count": pending_count,
-                "confirmed_count": confirmed_count,
-                "completed_count": completed_count,
-                "cancelled_count": cancelled_count,
-                "today_count": len(todays_list),
-                "upcoming_count": len(upcoming_list),
-                "todays_appointments": todays_list,
-                "upcoming_appointments": upcoming_list,
-                "recent_clients": recent_list,
-                "status_distribution": status_data,
-            },
-            status=status.HTTP_200_OK,
-        )
-
-    except Exception as e:
-        print(f"❌ Dashboard stats error: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return Response(
-            {"error": f"Failed to fetch dashboard stats: {str(e)}"},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
