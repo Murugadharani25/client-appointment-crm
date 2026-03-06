@@ -5,6 +5,7 @@ from .views import (
     update_appointment_status,
     upload_mom_pdf,
     get_client_by_phone,
+    get_captcha,
     dashboard_stats,
     admin_login,   # ✅ ADD THIS
 )
@@ -18,6 +19,9 @@ urlpatterns = [
 
     # ✅ Admin Login API
     path("admin-login/", admin_login, name="admin-login"),   # ✅ ADD THIS
+
+    # ✅ CAPTCHA generator
+    path("captcha/", get_captcha, name="get-captcha"),
 
     # ✅ Admin Dashboard statistics
     path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),

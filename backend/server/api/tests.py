@@ -77,3 +77,47 @@ class DashboardStatsTests(TestCase):
         self.assertEqual(dist.get("Confirmed"), 1)
         self.assertEqual(dist.get("Completed"), 1)
         self.assertEqual(dist.get("Cancelled"), 0)
+
+
+class CaptchaAndLoginTests(TestCase):
+    def test_captcha_and_login_success(self):
+        # fetch captcha
+        resp = self.client.get("/api/captcha/")
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("question", data)
+        self.assertIn("token", data)
+
+        token = data["token"]
+        # question is alphanumeric code, answer equals question
+        answer = data["question"]
+
+        # create a superuser for login
+        from django.contrib.auth.models import User
+        User.objects.create_superuser(username="admin", password="pass123")
+
+        # attempt login with correct captcha, credentials
+        login_payload = {
+            "username": "admin",
+            "password": "pass123",
+            "captcha_token": token,
+            "captcha_answer": answer,
+        }
+        resp2 = self.client.post("/api/admin-login/", login_payload, content_type="application/json")
+        self.assertEqual(resp2.status_code, 200)
+        self.assertTrue(resp2.json().get("isAdmin"))
+
+    def test_captcha_invalid(self):
+        # obtain a captcha token but send wrong answer
+        resp = self.client.get("/api/captcha/")
+        token = resp.json()["token"]
+        payload = {"username": "whatever", "password": "x", "captcha_token": token, "captcha_answer": "wrong"}
+        resp2 = self.client.post("/api/admin-login/", payload, content_type="application/json")
+        self.assertEqual(resp2.status_code, 400)
+        self.assertEqual(resp2.json().get("message"), "Invalid CAPTCHA. Please try again.")
+
+    def test_captcha_missing(self):
+        payload = {"username": "u", "password": "p"}
+        resp = self.client.post("/api/admin-login/", payload, content_type="application/json")
+        self.assertEqual(resp.status_code, 400)
+        self.assertIn("Invalid CAPTCHA", resp.json().get("message", ""))

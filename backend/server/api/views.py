@@ -13,6 +13,11 @@ from .models import Client, Appointment
 from .serializers import AppointmentSerializer
 from django.utils import timezone
 from datetime import timedelta
+import random
+import uuid
+
+# simple in-memory store for captcha tokens
+CAPTCHA_STORE = {}
 
 
 # ============================================================
@@ -391,14 +396,40 @@ def dashboard_stats(request):
 # ✅ 6) ADMIN LOGIN (Optional)
 # POST /api/admin-login/
 # ============================================================
+
+
+# ============================================================
+# ✅ 7) CAPTCHA GENERATOR
+# GET /api/captcha/
+# ============================================================
+@api_view(["GET"])
+def get_captcha(request):
+    """Return a randomly generated alphanumeric captcha string and token."""
+    # 5 character uppercase alphanumeric code
+    code = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=5))
+    # store the expected answer same as code
+    token = str(uuid.uuid4())
+    CAPTCHA_STORE[token] = code
+    # send code as question for display; UI can style appropriately
+    return Response({"question": code, "token": token}, status=status.HTTP_200_OK)
 @api_view(["POST"])
 def admin_login(request):
     """
     Frontend sends:
     {
-      username, password
+      username, password,
+      captcha_token, captcha_answer
     }
     """
+
+    # ✅ validate captcha first
+    token = request.data.get("captcha_token")
+    answer = request.data.get("captcha_answer")
+    if not token or not answer:
+        return Response({"message": "Invalid CAPTCHA. Please try again."}, status=400)
+    expected = CAPTCHA_STORE.pop(token, None)
+    if expected is None or expected != str(answer).strip():
+        return Response({"message": "Invalid CAPTCHA. Please try again."}, status=400)
 
     username = request.data.get("username")
     password = request.data.get("password")

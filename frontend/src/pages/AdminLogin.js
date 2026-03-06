@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 export default function AdminLogin() {
@@ -8,6 +8,10 @@ export default function AdminLogin() {
     username: "",
     password: "",
   });
+
+  const [captchaQuestion, setCaptchaQuestion] = useState("");
+  const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaAnswer, setCaptchaAnswer] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -22,25 +26,40 @@ export default function AdminLogin() {
     setLoading(true);
     setError("");
 
+    // ensure captcha answered
+    if (!captchaAnswer.trim()) {
+      setError("Invalid CAPTCHA. Please try again.");
+      setLoading(false);
+      return;
+    }
+
     try {
+      const payload = {
+        ...loginData,
+        captcha_token: captchaToken,
+        captcha_answer: captchaAnswer,
+      };
+
       const res = await fetch("http://127.0.0.1:8000/api/admin-login/", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(loginData),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
 
       if (res.ok) {
-        // ✅ Store admin login flag
         localStorage.setItem("adminLoggedIn", "true");
-
-        // ✅ Redirect without popup
         navigate("/admin-dashboard");
       } else {
         setError(data.message || "Invalid admin credentials");
+        // when captcha fails we should reload question
+        if (data.message && data.message.toLowerCase().includes("captcha")) {
+          loadCaptcha();
+          setCaptchaAnswer("");
+        }
       }
     } catch (err) {
       setError("Server not connected. Please check backend.");
@@ -49,6 +68,23 @@ export default function AdminLogin() {
       setLoading(false);
     }
   };
+
+  // fetch captcha question when component mounts
+  const loadCaptcha = async () => {
+    try {
+      const res = await fetch("http://127.0.0.1:8000/api/captcha/");
+      const data = await res.json();
+      setCaptchaQuestion(data.question || "");
+      setCaptchaToken(data.token || "");
+    } catch (err) {
+      console.error("Failed to load captcha", err);
+    }
+  };
+
+  // run once on mount
+  useEffect(() => {
+    loadCaptcha();
+  }, []);
 
   return (
     <div style={containerStyle}>
@@ -79,6 +115,26 @@ export default function AdminLogin() {
             required
             style={inputStyle}
           />
+
+          {/* new captcha section */}
+          {captchaQuestion && (
+            <>
+              <label style={labelStyle}>CAPTCHA</label>
+              <div style={styles.captchaBox}>{captchaQuestion}</div>
+              <input
+                type="text"
+                name="captcha"
+                placeholder="Type the characters shown above"
+                value={captchaAnswer}
+                onChange={(e) => {
+                  setCaptchaAnswer(e.target.value);
+                  setError("");
+                }}
+                required
+                style={inputStyle}
+              />
+            </>
+          )}
 
           {/* ❌ Error Message (No Popup) */}
           {error && (
@@ -143,6 +199,20 @@ const inputStyle = {
   border: "1px solid #ccc",
 };
 
+const captchaBoxStyle = {
+  display: "inline-block",
+  padding: "10px 20px",
+  margin: "8px 0",
+  background: "#f3f4f6",
+  border: "1px solid #d1d5db",
+  borderRadius: "8px",
+  fontFamily: "monospace",
+  letterSpacing: "4px",
+  fontSize: "18px",
+  textAlign: "center",
+  userSelect: "none",
+};
+
 const buttonStyle = {
   width: "100%",
   padding: "12px",
@@ -152,4 +222,8 @@ const buttonStyle = {
   color: "white",
   fontSize: "16px",
   fontWeight: "bold",
+};
+
+const styles = {
+  captchaBox: captchaBoxStyle,
 };

@@ -179,6 +179,17 @@ export const appointmentAPI = {
       throw error;
     }
   },
+
+  // ✅ Fetch captcha question/token
+  getCaptcha: async () => {
+    try {
+      const response = await api.get("captcha/");
+      return response;
+    } catch (error) {
+      console.error("Error fetching captcha:", error);
+      throw error;
+    }
+  },
 };
 
 export default api;
