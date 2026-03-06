@@ -1,0 +1,191 @@
+/* ==========================================
+   ✅ VCONNECT - PROFESSIONAL FULLCALENDAR UI
+   (Clean + Compact + Modern)
+========================================== */
+
+/* ✅ Prevent FullCalendar from exceeding page */
+.fc {
+  background: white;
+  border-radius: 18px;
+  padding: 14px;
+  font-family: "Segoe UI", Arial, sans-serif !important;
+  font-size: 13px !important;
+
+  max-width: 100% !important;
+  overflow-x: auto !important;
+}
+
+/* Force FullCalendar layout inside container */
+.fc .fc-scrollgrid,
+.fc .fc-view-harness,
+.fc .fc-view-harness-active {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+/* Toolbar (top header area) */
+.fc .fc-toolbar {
+  padding: 10px 6px;
+  gap: 10px;
+}
+
+/* Toolbar title (Jan 25 – 31, 2026) */
+.fc .fc-toolbar-title {
+  font-size: 20px !important;
+  font-weight: 900 !important;
+  color: #111827 !important;
+}
+
+/* Fix toolbar button alignment */
+.fc .fc-toolbar-chunk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* Button group spacing (Month/Week/Day) */
+.fc .fc-button-group {
+  display: flex;
+  gap: 8px;
+}
+
+/* Buttons style */
+.fc .fc-button {
+  border-radius: 12px !important;
+  font-weight: 900 !important;
+  border: none !important;
+  padding: 7px 14px !important;
+  font-size: 13px !important;
+  margin: 0 !important;
+  box-shadow: 0px 5px 14px rgba(0, 0, 0, 0.1) !important;
+
+  /* ✅ Professional button text */
+  text-transform: capitalize !important;
+  letter-spacing: 0.3px;
+}
+
+/* Button hover */
+.fc .fc-button:hover {
+  filter: brightness(0.95);
+}
+
+/* Button active */
+.fc .fc-button:focus,
+.fc .fc-button:active {
+  outline: none !important;
+  box-shadow: 0px 5px 14px rgba(0, 0, 0, 0.12) !important;
+}
+
+/* Day numbers (25, 26, 27...) */
+.fc .fc-daygrid-day-number {
+  font-weight: 800 !important;
+  color: #111827 !important;
+  text-decoration: none !important;
+  font-size: 13px !important;
+}
+
+/* Column header (Sun, Mon, Tue...) */
+.fc .fc-col-header-cell-cushion {
+  font-weight: 900 !important;
+  color: #111827 !important;
+  text-decoration: none !important;
+  font-size: 13px !important;
+  padding: 8px 0 !important;
+}
+
+/* Time column labels (8am, 9am...) */
+.fc .fc-timegrid-slot-label {
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #374151 !important;
+}
+
+/* Compact time slots (reduce big height) */
+.fc .fc-timegrid-slot {
+  height: 34px !important;
+}
+
+/* Today highlight */
+.fc .fc-day-today {
+  background: rgba(250, 204, 21, 0.08) !important;
+}
+
+/* Borders lighter (clean professional look) */
+.fc-theme-standard td,
+.fc-theme-standard th {
+  border: 1px solid rgba(0, 0, 0, 0.08) !important;
+}
+
+/* ==========================================
+   ✅ Event Style (Professional)
+========================================== */
+.fc .fc-event {
+  border-radius: 12px !important;
+  padding: 6px 8px !important;
+  font-weight: 900 !important;
+  cursor: pointer;
+  border: none !important;
+}
+
+/* Event title (single line with ...) */
+.fc .fc-event-title {
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+}
+
+/* Event time style */
+.fc .fc-event-time {
+  font-size: 11px !important;
+  font-weight: 900 !important;
+  text-transform: uppercase !important;
+}
+
+/* Add small gap between events */
+.fc .fc-daygrid-event-harness {
+  margin-top: 5px !important;
+}
+
+/* ==========================================
+   ✅ Status Badge inside Event (P/C/D/X)
+========================================== */
+.vconnect-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.8);
+  color: #111827;
+  font-size: 11px;
+  font-weight: 900;
+  margin-right: 6px;
+}
+
+/* ==========================================
+   ✅ MOBILE RESPONSIVE FIX
+========================================== */
+@media (max-width: 768px) {
+  .fc {
+    padding: 10px !important;
+  }
+
+  .fc .fc-toolbar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 10px !important;
+  }
+
+  .fc .fc-toolbar-title {
+    font-size: 16px !important;
+  }
+
+  .fc .fc-button {
+    padding: 6px 10px !important;
+    font-size: 12px !important;
+  }
+}
