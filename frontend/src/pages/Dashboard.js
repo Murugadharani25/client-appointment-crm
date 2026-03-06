@@ -3,13 +3,16 @@ import { useNavigate } from "react-router-dom";
 import { appointmentAPI } from "../api";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from "recharts";
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
 
   const [appointments, setAppointments] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
 
+  const [stats, setStats] = useState(null);
   const [search, setSearch] = useState("");
   const [savingId, setSavingId] = useState(null);
   const [uploadingId, setUploadingId] = useState(null);
@@ -22,6 +25,12 @@ export default function AdminDashboard() {
       navigate("/admin-login");
     }
   }, [navigate]);
+
+  // ✅ Fetch Appointments AND Stats on load
+  useEffect(() => {
+    fetchAppointments();
+    fetchDashboardStats();
+  }, []);
 
   const fetchAppointments = async () => {
     try {
@@ -36,9 +45,17 @@ export default function AdminDashboard() {
     }
   };
 
-  useEffect(() => {
-    fetchAppointments();
-  }, []);
+  const fetchDashboardStats = async () => {
+    try {
+      setStatsLoading(true);
+      const res = await appointmentAPI.getDashboardStats();
+      setStats(res.data);
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
 
   // ✅ Filter Search
   const filteredAppointments = useMemo(() => {
@@ -64,23 +81,18 @@ export default function AdminDashboard() {
   const updateStatus = async (appointmentId, newStatus) => {
     try {
       setSavingId(appointmentId);
-
-      // 🔥 Backend API should update DB
       await appointmentAPI.updateAppointmentStatus(appointmentId, newStatus);
 
-      // Update UI immediately
       setAppointments((prev) =>
         prev.map((a) =>
           a.id === appointmentId ? { ...a, status: newStatus } : a
         )
       );
-    } catch (error) {
-      console.error("❌ STATUS UPDATE FAILED:");
-      console.error("Error Message:", error.message);
-      console.error("Backend Response:", error.response?.data);
-      console.error("Status Code:", error.response?.status);
-      console.error("Full Error:", error);
 
+      // Refresh stats
+      fetchDashboardStats();
+    } catch (error) {
+      console.error("❌ STATUS UPDATE FAILED:", error);
       alert(`❌ Failed to update status: ${error.message}`);
     } finally {
       setSavingId(null);
@@ -102,7 +114,6 @@ export default function AdminDashboard() {
       const formData = new FormData();
       formData.append("mom_pdf", file);
 
-      // 🔥 Backend API should save PDF and return URL
       const res = await appointmentAPI.uploadMinutesOfMeeting(
         appointmentId,
         formData
@@ -110,19 +121,13 @@ export default function AdminDashboard() {
 
       const momUrl = res?.data?.mom_url;
 
-      // Update UI
       setAppointments((prev) =>
         prev.map((a) => (a.id === appointmentId ? { ...a, mom_url: momUrl } : a))
       );
 
       alert("✅ Minutes of Meeting PDF uploaded successfully!");
     } catch (error) {
-      console.error("❌ PDF UPLOAD FAILED:");
-      console.error("Error Message:", error.message);
-      console.error("Backend Response:", error.response?.data);
-      console.error("Status Code:", error.response?.status);
-      console.error("Full Error:", error);
-
+      console.error("❌ PDF UPLOAD FAILED:", error);
       alert(`❌ Failed to upload PDF: ${error.message}`);
     } finally {
       setUploadingId(null);
@@ -179,20 +184,22 @@ export default function AdminDashboard() {
         <div>
           <h2 style={styles.heading}>📌 Admin Dashboard</h2>
           <p style={styles.subHeading}>
-            Update status, upload MoM PDF, export report, and view calendar.
+            System statistics, today's appointments, and management tools.
           </p>
         </div>
 
         <div style={styles.headerActions}>
           <button
             style={{ ...styles.btn, ...styles.btnLight }}
-            onClick={fetchAppointments}
-            disabled={loading}
+            onClick={() => {
+              fetchAppointments();
+              fetchDashboardStats();
+            }}
+            disabled={loading || statsLoading}
           >
-            {loading ? "🔄 Loading..." : "🔄 Refresh"}
+            {loading || statsLoading ? "🔄 Loading..." : "🔄 Refresh"}
           </button>
 
-          {/* ✅ Calendar View */}
           <button
             style={{ ...styles.btn, ...styles.btnBlue }}
             onClick={() => navigate("/admin-calendar")}
@@ -216,10 +223,177 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {/* Table Card */}
+      {/* Statistics Cards Section */}
+      {statsLoading ? (
+        <div style={styles.loadingCard}>Loading statistics...</div>
+      ) : stats ? (
+        <>
+          {/* Summary Statistics */}
+          <div style={styles.statsGrid}>
+            <StatCard
+              title="Total Clients"
+              value={stats.total_clients}
+              icon="👥"
+              bgColor="#e3f2fd"
+              textColor="#1976d2"
+            />
+            <StatCard
+              title="Total Appointments"
+              value={stats.total_appointments}
+              icon="📅"
+              bgColor="#f3e5f5"
+              textColor="#7b1fa2"
+            />
+            <StatCard
+              title="Pending"
+              value={stats.pending_count}
+              icon="⏳"
+              bgColor="#fff3e0"
+              textColor="#f57c00"
+            />
+            <StatCard
+              title="Confirmed"
+              value={stats.confirmed_count}
+              icon="✅"
+              bgColor="#e8f5e9"
+              textColor="#388e3c"
+            />
+            <StatCard
+              title="Completed"
+              value={stats.completed_count}
+              icon="🎉"
+              bgColor="#f1f8e9"
+              textColor="#689f38"
+            />
+            <StatCard
+              title="Cancelled"
+              value={stats.cancelled_count}
+              icon="❌"
+              bgColor="#ffebee"
+              textColor="#d32f2f"
+            />
+          </div>
+
+          {/* Analytics Row: Chart + Today's Appointments */}
+          <div style={styles.analyticsRow}>
+            {/* Appointment Status Chart */}
+            <div style={styles.chartCard}>
+              <h3 style={styles.cardTitle}>📊 Appointment Status Distribution</h3>
+              {stats.status_distribution && stats.status_distribution.some(s => s.value > 0) ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <PieChart>
+                    <Pie
+                      data={stats.status_distribution}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, value }) => `${name}: ${value}`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {stats.status_distribution.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => `${value} appointment(s)`} />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <p style={styles.noDataText}>No appointment data available</p>
+              )}
+            </div>
+
+            {/* Today's Appointments */}
+            <div style={styles.todayCard}>
+              <h3 style={styles.cardTitle}>📅 Today's Appointments ({stats.today_count})</h3>
+              {stats.todays_appointments && stats.todays_appointments.length > 0 ? (
+                <div style={styles.appointmentList}>
+                  {stats.todays_appointments.map((apt, index) => (
+                    <div key={index} style={styles.appointmentItem}>
+                      <div style={styles.aptTime}>{apt.time}</div>
+                      <div style={styles.aptDetails}>
+                        <span style={styles.aptName}>{apt.client_name}</span>
+                        <span style={styles.aptService}>{apt.service}</span>
+                      </div>
+                      <span style={{...styles.aptStatus, background: getStatusColor(apt.status)}}>{apt.status}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p style={styles.noDataText}>No appointments scheduled for today</p>
+              )}
+            </div>
+          </div>
+
+          {/* Upcoming Appointments */}
+          <div style={styles.sectionCard}>
+            <h3 style={styles.cardTitle}>🚀 Upcoming Appointments (Next 10)</h3>
+            {stats.upcoming_appointments && stats.upcoming_appointments.length > 0 ? (
+              <div style={styles.tableWrapper}>
+                <table style={styles.miniTable}>
+                  <thead>
+                    <tr style={styles.miniTableHead}>
+                      <th style={styles.miniTh}>Date</th>
+                      <th style={styles.miniTh}>Time</th>
+                      <th style={styles.miniTh}>Client</th>
+                      <th style={styles.miniTh}>Service</th>
+                      <th style={styles.miniTh}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.upcoming_appointments.map((apt, index) => (
+                      <tr key={index} style={styles.miniTableRow}>
+                        <td style={styles.miniTd}>{apt.date}</td>
+                        <td style={styles.miniTd}>{apt.time}</td>
+                        <td style={styles.miniTd}>{apt.client_name}</td>
+                        <td style={styles.miniTd}>{apt.service}</td>
+                        <td style={{ ...styles.miniTd, background: getStatusColor(apt.status), color: "white", borderRadius: "4px" }}>{apt.status}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={styles.noDataText}>No upcoming appointments</p>
+            )}
+          </div>
+
+          {/* Recent Clients */}
+          <div style={styles.sectionCard}>
+            <h3 style={styles.cardTitle}>🆕 Recent Clients (Last 5)</h3>
+            {stats.recent_clients && stats.recent_clients.length > 0 ? (
+              <div style={styles.tableWrapper}>
+                <table style={styles.miniTable}>
+                  <thead>
+                    <tr style={styles.miniTableHead}>
+                      <th style={styles.miniTh}>Name</th>
+                      <th style={styles.miniTh}>Phone</th>
+                      <th style={styles.miniTh}>Association</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.recent_clients.map((client, index) => (
+                      <tr key={index} style={styles.miniTableRow}>
+                        <td style={styles.miniTd}>{client.name}</td>
+                        <td style={styles.miniTd}>{client.phone}</td>
+                        <td style={styles.miniTd}>{client.association || "None"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p style={styles.noDataText}>No recent clients</p>
+            )}
+          </div>
+        </>
+      ) : null}
+
+      {/* Main Appointments Table Card */}
       <div style={styles.tableCard}>
         <div style={styles.tableTop}>
-          <h3 style={styles.tableTitle}>📅 Appointments List</h3>
+          <h3 style={styles.tableTitle}>📅 All Appointments List</h3>
 
           <input
             type="text"
@@ -314,6 +488,35 @@ export default function AdminDashboard() {
   );
 }
 
+// ✅ Reusable Stat Card Component
+function StatCard({ title, value, icon, bgColor, textColor }) {
+  return (
+    <div style={{ ...styles.statCard, background: bgColor }}>
+      <div style={styles.statIcon}>{icon}</div>
+      <div>
+        <p style={styles.statValue}>{value}</p>
+        <p style={{ ...styles.statTitle, color: textColor }}>{title}</p>
+      </div>
+    </div>
+  );
+}
+
+// ✅ Helper function to get status color
+function getStatusColor(status) {
+  switch (status) {
+    case "Pending":
+      return "#f59e0b";
+    case "Confirmed":
+      return "#3b82f6";
+    case "Completed":
+      return "#10b981";
+    case "Cancelled":
+      return "#ef4444";
+    default:
+      return "#6b7280";
+  }
+}
+
 /* ✅ Styles */
 const styles = {
   page: {
@@ -382,6 +585,183 @@ const styles = {
     color: "white",
   },
 
+  loadingCard: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "18px",
+    textAlign: "center",
+    color: "#6b7280",
+    marginBottom: "18px",
+    fontWeight: "600",
+  },
+
+  // ✅ STATISTICS CARDS GRID
+  statsGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: "14px",
+    marginBottom: "20px",
+  },
+
+  statCard: {
+    padding: "16px",
+    borderRadius: "14px",
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    boxShadow: "0px 6px 16px rgba(0,0,0,0.08)",
+  },
+
+  statIcon: {
+    fontSize: "28px",
+  },
+
+  statValue: {
+    margin: 0,
+    fontSize: "22px",
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  statTitle: {
+    margin: "4px 0 0",
+    fontSize: "12px",
+    fontWeight: "600",
+  },
+
+  // ✅ ANALYTICS ROW (Chart + Today's)
+  analyticsRow: {
+    display: "grid",
+    gridTemplateColumns: "1fr 1fr",
+    gap: "18px",
+    marginBottom: "18px",
+  },
+
+  chartCard: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "18px",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.2)",
+  },
+
+  todayCard: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "18px",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.2)",
+  },
+
+  cardTitle: {
+    margin: "0 0 14px",
+    fontSize: "16px",
+    fontWeight: "800",
+    color: "#111827",
+  },
+
+  appointmentList: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+
+  appointmentItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "12px",
+    padding: "10px",
+    background: "#f9fafb",
+    borderRadius: "10px",
+    borderLeft: "4px solid #3b82f6",
+  },
+
+  aptTime: {
+    fontSize: "12px",
+    fontWeight: "700",
+    color: "#6b7280",
+    minWidth: "50px",
+  },
+
+  aptDetails: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    gap: "4px",
+  },
+
+  aptName: {
+    fontSize: "13px",
+    fontWeight: "700",
+    color: "#111827",
+  },
+
+  aptService: {
+    fontSize: "11px",
+    color: "#6b7280",
+  },
+
+  aptStatus: {
+    fontSize: "11px",
+    fontWeight: "700",
+    color: "white",
+    padding: "4px 8px",
+    borderRadius: "6px",
+  },
+
+  noDataText: {
+    textAlign: "center",
+    color: "#9ca3af",
+    fontSize: "14px",
+    margin: "10px 0",
+  },
+
+  // ✅ SECTION CARDS
+  sectionCard: {
+    background: "white",
+    padding: "20px",
+    borderRadius: "18px",
+    marginBottom: "18px",
+    boxShadow: "0px 10px 30px rgba(0,0,0,0.2)",
+  },
+
+  tableWrapper: {
+    overflowX: "auto",
+    borderRadius: "12px",
+    border: "1px solid #e5e7eb",
+  },
+
+  miniTable: {
+    width: "100%",
+    borderCollapse: "collapse",
+    minWidth: "100%",
+  },
+
+  miniTableHead: {
+    background: "#f9fafb",
+  },
+
+  miniTh: {
+    padding: "10px",
+    textAlign: "left",
+    borderBottom: "1px solid #e5e7eb",
+    fontSize: "12px",
+    color: "#111827",
+    fontWeight: "800",
+    whiteSpace: "nowrap",
+  },
+
+  miniTableRow: {
+    background: "white",
+  },
+
+  miniTd: {
+    padding: "10px",
+    borderBottom: "1px solid #f1f5f9",
+    fontSize: "12px",
+    color: "#111827",
+    fontWeight: "600",
+  },
+
+  // ✅ MAIN APPOINTMENTS TABLE
   tableCard: {
     background: "white",
     padding: "20px",
@@ -420,12 +800,6 @@ const styles = {
     marginTop: "14px",
     color: "#374151",
     fontWeight: "600",
-  },
-
-  tableWrapper: {
-    overflowX: "auto",
-    borderRadius: "12px",
-    border: "1px solid #e5e7eb",
   },
 
   table: {

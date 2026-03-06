@@ -103,6 +103,17 @@ export const appointmentAPI = {
     }
   },
 
+  // ✅ Get dashboard statistics
+  getDashboardStats: async () => {
+    try {
+      const response = await api.get("dashboard-stats/");
+      return response;
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error);
+      throw error;
+    }
+  },
+
   // ✅ Update appointment status (Admin dashboard)
   updateAppointmentStatus: async (id, status) => {
     try {

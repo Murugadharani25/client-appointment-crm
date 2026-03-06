@@ -6,7 +6,8 @@ from .views import (
     upload_mom_pdf,
     get_client_by_phone,
     search_clients,
-    admin_login,   # ✅ ADD THIS
+    admin_login,
+    dashboard_stats,
 )
 
 urlpatterns = [
@@ -20,7 +21,10 @@ urlpatterns = [
     path("clients/", search_clients, name="client-search"),
 
     # ✅ Admin Login API
-    path("admin-login/", admin_login, name="admin-login"),   # ✅ ADD THIS
+    path("admin-login/", admin_login, name="admin-login"),
+
+    # ✅ Dashboard Stats API
+    path("dashboard-stats/", dashboard_stats, name="dashboard-stats"),
 
     # ✅ Admin Dashboard list
     path("appointments/", get_appointments, name="appointments"),
