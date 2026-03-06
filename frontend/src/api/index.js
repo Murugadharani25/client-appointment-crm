@@ -147,6 +147,17 @@ export const appointmentAPI = {
     }
   },
 
+  // ✅ Search clients by name (used for autocomplete)
+  searchClients: async (name) => {
+    try {
+      const response = await api.get(`clients/?name=${encodeURIComponent(name)}`);
+      return response;
+    } catch (error) {
+      console.error("Error searching clients by name:", error);
+      throw error;
+    }
+  },
+
   // ✅ Test MongoDB connection (Optional)
   testMongoDB: async () => {
     try {

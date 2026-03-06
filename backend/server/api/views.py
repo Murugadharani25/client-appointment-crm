@@ -299,6 +299,45 @@ def get_client_by_phone(request):
 
 
 # ============================================================
+# ✅ NEW: SEARCH CLIENTS BY NAME (Autocomplete)
+# GET /api/clients/?name=<partial name>
+# ============================================================
+@api_view(["GET"])
+def search_clients(request):
+    """
+    Returns a list of clients whose names contain the provided query
+    string (case‑insensitive).  The frontend uses this for typeahead
+    suggestions.  Only a handful of fields are returned so that the
+    client object can be stored locally and used to populate all fields
+    when the user picks one of the suggestions.
+    """
+    query = request.GET.get("name", "").strip()
+
+    if not query:
+        # nothing to search for -> return empty array (status 200)
+        return Response([], status=status.HTTP_200_OK)
+
+    matches = (
+        Client.objects
+        .filter(name__icontains=query)
+        .order_by("name")
+        [:10]  # cap the results to prevent huge payloads
+    )
+
+    payload = []
+    for c in matches:
+        payload.append({
+            "name": c.name,
+            "phone": c.phone,
+            "email": c.email,
+            "address": c.address or "",
+            "association": c.association,
+        })
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+# ============================================================
 # ✅ 6) ADMIN LOGIN (Optional)
 # POST /api/admin-login/
 # ============================================================

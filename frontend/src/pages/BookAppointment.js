@@ -24,6 +24,9 @@ export default function BookAppointment() {
   const [clientStatus, setClientStatus] = useState("");
   const [isCheckingPhone, setIsCheckingPhone] = useState(false);
 
+  // autocomplete suggestions for name field
+  const [nameSuggestions, setNameSuggestions] = useState([]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
@@ -65,6 +68,32 @@ export default function BookAppointment() {
       setIsCheckingPhone(false);
     }
   }, []);
+
+  // ------------------------------------------------------------------
+  // search for names to power the autocomplete dropdown
+  const searchClientsByName = useCallback(async (name) => {
+    if (!name || name.trim().length < 2) {
+      setNameSuggestions([]);
+      return;
+    }
+
+    try {
+      const response = await appointmentAPI.searchClients(name);
+      setNameSuggestions(response.data);
+    } catch (error) {
+      console.error("Error searching clients by name", error);
+      setNameSuggestions([]);
+    }
+  }, []);
+
+  // debounce name search
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      searchClientsByName(formData.name);
+    }, 300);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.name, searchClientsByName]);
 
   // Debounce phone number checking
   useEffect(() => {
@@ -201,7 +230,7 @@ export default function BookAppointment() {
         )}
 
         <form onSubmit={handleSubmit} style={styles.formGrid}>
-          <div style={styles.field}>
+          <div style={{ ...styles.field, position: "relative" }}>
             <label style={styles.label}>
               Full Name <span style={styles.star}>*</span>
             </label>
@@ -211,11 +240,40 @@ export default function BookAppointment() {
               placeholder="Enter your full name"
               value={formData.name}
               onChange={handleChange}
+              onBlur={() => {
+                // hide suggestions shortly after blur to allow click
+                setTimeout(() => setNameSuggestions([]), 150);
+              }}
               style={{
                 ...styles.input,
                 borderColor: errors.name ? "#e11d48" : "#d1d5db",
               }}
             />
+            {nameSuggestions.length > 0 && (
+              <ul style={styles.suggestionsList}>
+                {nameSuggestions.map((client) => (
+                  <li
+                    key={client.phone}
+                    style={styles.suggestionItem}
+                    onMouseDown={() => {
+                      // use onMouseDown so that blur doesn't fire first
+                      setFormData((prev) => ({
+                        ...prev,
+                        name: client.name,
+                        phone: client.phone,
+                        email: client.email,
+                        address: client.address,
+                        association: client.association,
+                      }));
+                      setNameSuggestions([]);
+                      setClientStatus("existing");
+                    }}
+                  >
+                    {client.name}
+                  </li>
+                ))}
+              </ul>
+            )}
             <p style={styles.errorSpace}>{errors.name || ""}</p>
           </div>
 
@@ -445,6 +503,27 @@ const styles = {
     fontSize: "12px",
     fontWeight: "600",
     color: "#e11d48",
+  },
+
+  suggestionsList: {
+    position: "absolute",
+    top: "100%",
+    left: 0,
+    right: 0,
+    background: "white",
+    border: "1px solid #d1d5db",
+    maxHeight: "150px",
+    overflowY: "auto",
+    zIndex: 1000,
+    borderRadius: "0 0 8px 8px",
+    listStyle: "none",
+    margin: 0,
+    padding: 0,
+  },
+
+  suggestionItem: {
+    padding: "10px",
+    cursor: "pointer",
   },
 
   submitBtn: {
