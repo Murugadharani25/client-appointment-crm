@@ -26,7 +26,7 @@ export default function AdminLogin() {
     setLoading(true);
     setError("");
 
-    // ensure captcha answered
+    // Ensure CAPTCHA is answered
     if (!captchaAnswer.trim()) {
       setError("Invalid CAPTCHA. Please try again.");
       setLoading(false);
@@ -51,11 +51,14 @@ export default function AdminLogin() {
       const data = await res.json();
 
       if (res.ok) {
+        // ✅ Store admin login flag
         localStorage.setItem("adminLoggedIn", "true");
+
+        // ✅ Redirect without popup
         navigate("/admin-dashboard");
       } else {
         setError(data.message || "Invalid admin credentials");
-        // when captcha fails we should reload question
+        // Reload CAPTCHA on error
         if (data.message && data.message.toLowerCase().includes("captcha")) {
           loadCaptcha();
           setCaptchaAnswer("");
@@ -69,19 +72,20 @@ export default function AdminLogin() {
     }
   };
 
-  // fetch captcha question when component mounts
+  // Fetch CAPTCHA when component mounts and on refresh
   const loadCaptcha = async () => {
     try {
       const res = await fetch("http://127.0.0.1:8000/api/captcha/");
       const data = await res.json();
       setCaptchaQuestion(data.question || "");
       setCaptchaToken(data.token || "");
+      setCaptchaAnswer("");
     } catch (err) {
-      console.error("Failed to load captcha", err);
+      console.error("Failed to load CAPTCHA", err);
     }
   };
 
-  // run once on mount
+  // Load CAPTCHA on mount
   useEffect(() => {
     loadCaptcha();
   }, []);
@@ -116,18 +120,28 @@ export default function AdminLogin() {
             style={inputStyle}
           />
 
-          {/* new captcha section */}
+          {/* CAPTCHA Section */}
           {captchaQuestion && (
             <>
               <label style={labelStyle}>CAPTCHA</label>
-              <div style={styles.captchaBox}>{captchaQuestion}</div>
+              <div style={styles.captchaContainer}>
+                <div style={styles.captchaBox}>{captchaQuestion}</div>
+                <button
+                  type="button"
+                  onClick={loadCaptcha}
+                  style={styles.refreshButton}
+                  title="Generate new CAPTCHA"
+                >
+                  🔄
+                </button>
+              </div>
               <input
                 type="text"
                 name="captcha"
-                placeholder="Type the characters shown above"
+                placeholder="Enter the characters shown above"
                 value={captchaAnswer}
                 onChange={(e) => {
-                  setCaptchaAnswer(e.target.value);
+                  setCaptchaAnswer(e.target.value.toUpperCase());
                   setError("");
                 }}
                 required
@@ -199,20 +213,6 @@ const inputStyle = {
   border: "1px solid #ccc",
 };
 
-const captchaBoxStyle = {
-  display: "inline-block",
-  padding: "10px 20px",
-  margin: "8px 0",
-  background: "#f3f4f6",
-  border: "1px solid #d1d5db",
-  borderRadius: "8px",
-  fontFamily: "monospace",
-  letterSpacing: "4px",
-  fontSize: "18px",
-  textAlign: "center",
-  userSelect: "none",
-};
-
 const buttonStyle = {
   width: "100%",
   padding: "12px",
@@ -224,6 +224,47 @@ const buttonStyle = {
   fontWeight: "bold",
 };
 
+const captchaContainerStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  marginBottom: "12px",
+};
+
+const captchaBoxStyle = {
+  flex: 1,
+  padding: "12px",
+  background: "#f3f4f6",
+  border: "2px solid #d1d5db",
+  borderRadius: "8px",
+  fontFamily: "monospace",
+  fontSize: "20px",
+  fontWeight: "bold",
+  letterSpacing: "3px",
+  textAlign: "center",
+  userSelect: "none",
+  color: "#111827",
+};
+
+const refreshButtonStyle = {
+  padding: "8px 12px",
+  borderRadius: "6px",
+  border: "2px solid #3b82f6",
+  background: "#ffffff",
+  color: "#3b82f6",
+  fontSize: "18px",
+  cursor: "pointer",
+  fontWeight: "bold",
+  transition: "all 0.2s ease",
+  minWidth: "44px",
+  minHeight: "44px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
 const styles = {
+  captchaContainer: captchaContainerStyle,
   captchaBox: captchaBoxStyle,
+  refreshButton: refreshButtonStyle,
 };

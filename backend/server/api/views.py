@@ -16,8 +16,82 @@ from datetime import timedelta
 import random
 import uuid
 
+from PIL import Image, ImageDraw, ImageFont
+import io
+import base64
+
 # simple in-memory store for captcha tokens
 CAPTCHA_STORE = {}
+
+
+def generate_captcha_image():
+    """
+    Generate a CAPTCHA image with distortion, noise, and character rotation.
+    Returns tuple of (image_base64, text_answer)
+    """
+    # Generate random 6-character alphanumeric text
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"  # exclude I, O, 1, 0 for clarity
+    text = "".join(random.choices(chars, k=6))
+    
+    # Create image 280x100 with white background
+    img_width, img_height = 280, 100
+    bg_color = (255, 255, 255)
+    img = Image.new("RGB", (img_width, img_height), bg_color)
+    draw = ImageDraw.Draw(img)
+    
+    # Add background noise (random dots)
+    for _ in range(80):
+        x, y = random.randint(0, img_width), random.randint(0, img_height)
+        noise_color = (random.randint(200, 255), random.randint(200, 255), random.randint(200, 255))
+        draw.point((x, y), fill=noise_color)
+    
+    # Add noise lines
+    for _ in range(3):
+        x1, y1 = random.randint(0, img_width), random.randint(0, img_height)
+        x2, y2 = random.randint(0, img_width), random.randint(0, img_height)
+        line_color = (random.randint(180, 230), random.randint(180, 230), random.randint(180, 230))
+        draw.line([(x1, y1), (x2, y2)], fill=line_color, width=1)
+    
+    # Try to use a default font, fallback to default if not available
+    try:
+        font = ImageFont.truetype("/Windows/Fonts/arial.ttf", 50)
+    except:
+        try:
+            font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 50)
+        except:
+            font = ImageFont.load_default()
+    
+    # Draw each character with distortion and rotation
+    char_positions = []
+    for i, char in enumerate(text):
+        x = 30 + i * 40
+        y = random.randint(15, 35)
+        
+        # Random angle rotation
+        angle = random.randint(-30, 30)
+        
+        # Create individual character image for rotation
+        char_img = Image.new("RGBA", (60, 80), (255, 255, 255, 0))
+        char_draw = ImageDraw.Draw(char_img)
+        
+        # Text color (dark)
+        text_color = (random.randint(20, 80), random.randint(20, 80), random.randint(20, 80))
+        
+        # Draw character
+        char_draw.text((10, 10), char, font=font, fill=text_color)
+        
+        # Rotate character
+        char_img_rotated = char_img.rotate(angle, expand=False, fillcolor=(255, 255, 255, 0))
+        
+        # Paste the rotated character onto main image
+        img.paste(char_img_rotated, (x - 15, y - 20), char_img_rotated)
+    
+    # Convert image to base64
+    buffered = io.BytesIO()
+    img.save(buffered, format="PNG")
+    img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
+    
+    return f"data:image/png;base64,{img_str}", text
 
 
 # ============================================================
@@ -277,15 +351,18 @@ def get_client_by_phone(request):
             status=status.HTTP_400_BAD_REQUEST,
         )
 
+    # Clean phone number by removing all non-digit characters
+    clean_phone = ''.join(filter(str.isdigit, phone))
+    
     # Validate phone number format (10 digits)
-    if not phone.isdigit() or len(phone) != 10:
+    if len(clean_phone) != 10:
         return Response(
             {"error": "Phone number must be exactly 10 digits"},
             status=status.HTTP_400_BAD_REQUEST,
         )
 
     try:
-        client = Client.objects.get(phone=phone)
+        client = Client.objects.get(phone=clean_phone)
         return Response(
             {
                 "exists": True,
@@ -303,6 +380,39 @@ def get_client_by_phone(request):
             {"exists": False, "message": "New client"},
             status=status.HTTP_200_OK,
         )
+
+
+# ============================================================
+# ✅ 5) SEARCH CLIENTS BY NAME (Autocomplete)
+# GET /api/clients/?name=<search_term>
+# ============================================================
+@api_view(["GET"])
+def search_clients(request):
+    """
+    Frontend calls this for name autocomplete in booking form.
+    Returns list of clients matching the search term (case-insensitive).
+    """
+    search_term = request.GET.get("name", "").strip()
+
+    if not search_term or len(search_term) < 2:
+        return Response([], status=status.HTTP_200_OK)
+
+    # Case-insensitive search on client names
+    clients = Client.objects.filter(
+        name__icontains=search_term
+    ).order_by('name')[:10]  # Limit to 10 results
+
+    results = []
+    for client in clients:
+        results.append({
+            "name": client.name,
+            "phone": client.phone,
+            "email": client.email,
+            "address": client.address or "",
+            "association": client.association,
+        })
+
+    return Response(results, status=status.HTTP_200_OK)
 
 
 # ============================================================
@@ -399,18 +509,17 @@ def dashboard_stats(request):
 
 
 # ============================================================
-# ✅ 7) CAPTCHA GENERATOR
+# ✅ 7) CAPTCHA GENERATOR (Text-based)
 # GET /api/captcha/
 # ============================================================
 @api_view(["GET"])
 def get_captcha(request):
-    """Return a randomly generated alphanumeric captcha string and token."""
-    # 5 character uppercase alphanumeric code
-    code = "".join(random.choices("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", k=5))
-    # store the expected answer same as code
+    """Return a simple alphanumeric CAPTCHA code and token."""
+    # Generate 6-character uppercase alphanumeric code (excluding similar chars)
+    chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    code = "".join(random.choices(chars, k=6))
     token = str(uuid.uuid4())
     CAPTCHA_STORE[token] = code
-    # send code as question for display; UI can style appropriately
     return Response({"question": code, "token": token}, status=status.HTTP_200_OK)
 @api_view(["POST"])
 def admin_login(request):

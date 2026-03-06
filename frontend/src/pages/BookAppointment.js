@@ -38,14 +38,17 @@ export default function BookAppointment() {
 
   // Debounced phone checking function
   const checkPhoneNumber = useCallback(async (phone) => {
-    if (!phone || phone.length !== 10 || !phone.match(/^\d{10}$/)) {
+    // Clean the phone number by removing all non-digit characters
+    const cleanPhone = phone.replace(/\D/g, '');
+    
+    if (!cleanPhone || cleanPhone.length !== 10) {
       setClientStatus("");
       return;
     }
 
     setIsCheckingPhone(true);
     try {
-      const response = await appointmentAPI.getClientByPhone(phone);
+      const response = await appointmentAPI.getClientByPhone(cleanPhone);
       const data = response.data;
 
       if (data.exists) {
@@ -268,6 +271,12 @@ export default function BookAppointment() {
                       setNameSuggestions([]);
                       setClientStatus("existing");
                     }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = "#f3f4f6";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = "white";
+                    }}
                   >
                     {client.name}
                   </li>
@@ -277,7 +286,7 @@ export default function BookAppointment() {
             <p style={styles.errorSpace}>{errors.name || ""}</p>
           </div>
 
-          <div style={styles.field}>
+          <div style={{ ...styles.field, position: "relative" }}>
             <label style={styles.label}>
               Phone Number <span style={styles.star}>*</span>
             </label>
